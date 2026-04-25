@@ -1,3 +1,8 @@
+![Status](https://img.shields.io/badge/Status-In%20Progress-yellow)
+![Type](https://img.shields.io/badge/System-Real--Time%20Cyber%20Defense-blue)
+![Architecture](https://img.shields.io/badge/Architecture-Graph%20Driven-purple)
+![Streaming](https://img.shields.io/badge/Streaming-Kafka-orange)
+![Graph](https://img.shields.io/badge/Graph-Neo4j-008CC1)
 # ChainBreaker 🛡️
 
 **Graph-driven Cyber Incident Detection and Automated Kill Chain Interruption Platform.**
@@ -119,3 +124,27 @@ cd frontend && npm install && npm run dev
 - **Streaming**: Apache Kafka
 - **API**: FastAPI
 - **Frontend**: Vite / React
+
+## 🔮 What's Next
+
+- 🧠 **ML-based Kill Chain Stage Detection**
+  - Map network flows to MITRE ATT&CK stages
+  - Sequence modeling for multi-stage attack prediction
+  - Experimenting with XGBoost / LSTM for temporal pattern learning
+
+- ⚡ **Real-Time Streaming Enhancements**
+  - Kafka → Spark Structured Streaming integration
+  - Sub-second threat detection pipeline
+
+- 🕸️ **Graph Intelligence Layer**
+  - Dynamic risk scoring for hosts
+  - Path-based anomaly detection in Neo4j
+
+- 🎛️ **Frontend Visualization Dashboard**
+  - Real-time attack graph visualization
+  - Kill chain progression UI
+  - Interactive node-level investigation
+
+- 🤖 **Automated Response Engine**
+  - Reinforcement learning (Maskable PPO) for containment strategies
+  - Policy-based isolation and mitigation actions
