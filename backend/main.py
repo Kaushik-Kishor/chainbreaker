@@ -32,19 +32,29 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     async def shutdown():
-        neo4j_client.close()
+        await neo4j_client.close()
         logger.info("api_shutdown_complete")
 
     @app.get("/health")
     async def health():
         return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
-    from backend.api.routes import graph, forensics, alerts, ml, agent
+    from backend.api.routes import graph, forensics, alerts, ml, agent, ws
+    import asyncio
+    
+    @app.on_event("startup")
+    async def start_mock_stream():
+        # First ensure models are trained and ready
+        ml.get_model_manager().auto_train_if_needed()
+        # Then start the mock stream in background
+        asyncio.create_task(ws.mock_telemetry_stream())
+
     app.include_router(graph.router, prefix="/api/graph", tags=["Graph"])
     app.include_router(forensics.router, prefix="/api/forensics", tags=["Forensics"])
     app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
     app.include_router(ml.router, prefix="/api/ml", tags=["ML"])
     app.include_router(agent.router, prefix="/api/agent", tags=["Agent"])
+    app.include_router(ws.router, prefix="/api/ws", tags=["WebSocket"])
 
     return app
 

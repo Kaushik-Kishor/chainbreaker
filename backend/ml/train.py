@@ -5,11 +5,12 @@ Usage (via scripts/train_ml.py entrypoint):
     python scripts/train_ml.py
 
 Direct:
-    python -m backend.ml.train --phase1 data/raw/phase1_NetworkData.csv \
-                               --phase2 data/raw/phase2_NetworkData.csv \
-                               --outdir models/ \
-                               --chunksize 200000 \
-                               --max-rows 0
+    python -m backend.ml.train \\
+        --train  data/train/train.csv \\
+        --val    data/validation/validation.csv \\
+        --outdir models/ \\
+        --chunksize 200000 \\
+        --max-rows 0
 """
 
 from __future__ import annotations
@@ -20,6 +21,9 @@ import os
 import pickle
 import time
 import warnings
+import json
+import datetime
+import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Iterator
 
@@ -55,14 +59,33 @@ log = logging.getLogger(__name__)
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 
+_ENCODINGS = ["utf-8", "utf-8-sig", "utf-16", "utf-16le", "latin1", "cp1252"]
+
+
 def _iter_chunks(path: str, chunksize: int) -> Iterator[pd.DataFrame]:
-    """Yield cleaned chunks from a CSV file."""
+    """Yield cleaned chunks from a CSV file, trying multiple encodings."""
+    encoding_used: str | None = None
+    for enc in _ENCODINGS:
+        try:
+            # Probe by reading first chunk only
+            probe = pd.read_csv(path, encoding=enc, nrows=5, low_memory=False)
+            encoding_used = enc
+            log.info("Detected encoding '%s' for %s", enc, path)
+            break
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+        except Exception:
+            break
+
+    if encoding_used is None:
+        raise RuntimeError(f"Cannot decode '{path}' with any of {_ENCODINGS}")
+
     reader = pd.read_csv(
         path,
-        encoding="utf-8",
+        encoding=encoding_used,
         chunksize=chunksize,
         low_memory=False,
-        dtype={TARGET_COLUMN: str, "label": str, "subLabel": str},
+        dtype={TARGET_COLUMN: str},
     )
     for chunk in reader:
         yield chunk
@@ -77,7 +100,7 @@ def load_dataset(
     Load one or more CSV files in chunks and return a single DataFrame.
 
     Args:
-        csv_paths:  List of file paths (phase1, phase2, ...).
+        csv_paths:  List of file paths (e.g. train.csv, validation.csv).
         chunksize:  Rows per chunk — controls peak RAM usage.
         max_rows:   If > 0, stop after this many total rows (for dev/testing).
                     Set to 0 to load everything.
@@ -327,6 +350,7 @@ def save_artifacts(
     label_encoder: LabelEncoder,
     iso_threshold: float,
     feature_columns: list[str],
+    metadata: dict = None,
 ) -> None:
     """Pickle all artifacts needed by inference.py into outdir."""
     Path(outdir).mkdir(parents=True, exist_ok=True)
@@ -344,6 +368,12 @@ def save_artifacts(
         with open(path, "wb") as f:
             pickle.dump(obj, f, protocol=pickle.HIGHEST_PROTOCOL)
         log.info("Saved: %s", path)
+        
+    if metadata:
+        meta_path = os.path.join(outdir, "model_metadata.json")
+        with open(meta_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+        log.info("Saved metadata: %s", meta_path)
 
 
 # ── Main pipeline ─────────────────────────────────────────────────────────────
@@ -410,7 +440,45 @@ def train_pipeline(
         X_benign, contamination=contamination
     )
 
-    # 8. Save all artifacts
+    # 8. Compute accuracy for metadata
+    y_pred = xgb_model.predict(X_test)
+    accuracy = np.mean(y_pred == y_test_enc)
+    
+    # 9. Extract Feature Importance
+    importances = xgb_model.feature_importances_
+    indices = np.argsort(importances)[::-1]
+    
+    log.info("-" * 60)
+    log.info("TOP 20 MOST IMPORTANT FEATURES:")
+    top_features = []
+    for f in range(min(20, len(FEATURE_COLUMNS))):
+        fname = FEATURE_COLUMNS[indices[f]]
+        fval = importances[indices[f]]
+        top_features.append({"feature": fname, "importance": float(fval)})
+        log.info("%d. %s (%f)", f + 1, fname, fval)
+    log.info("-" * 60)
+
+    # Save feature importance plot
+    plt.figure(figsize=(10, 8))
+    plt.title("Top 20 Feature Importances (XGBoost)")
+    plt.bar(range(min(20, len(FEATURE_COLUMNS))), [importances[i] for i in indices[:20]], align="center")
+    plt.xticks(range(min(20, len(FEATURE_COLUMNS))), [FEATURE_COLUMNS[i] for i in indices[:20]], rotation=45, ha="right")
+    plt.tight_layout()
+    plt.savefig(os.path.join(outdir, "feature_importance.png"))
+    plt.close()
+
+    # 10. Save all artifacts
+    metadata = {
+        "model_type": "XGBClassifier",
+        "training_timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "total_samples": len(X_train) + len(X_test),
+        "total_features": len(FEATURE_COLUMNS),
+        "total_classes": num_classes,
+        "classes": le.classes_.tolist(),
+        "validation_accuracy": float(accuracy),
+        "top_features": top_features
+    }
+
     save_artifacts(
         outdir=outdir,
         xgb_model=xgb_model,
@@ -418,6 +486,7 @@ def train_pipeline(
         label_encoder=le,
         iso_threshold=iso_threshold,
         feature_columns=FEATURE_COLUMNS,
+        metadata=metadata
     )
 
     elapsed = time.time() - t0
@@ -428,17 +497,17 @@ def train_pipeline(
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train XGBoost + Isolation Forest NIDS pipeline."
+        description="Train XGBoost + Isolation Forest NIDS pipeline on CICIoT2023."
     )
     parser.add_argument(
-        "--phase1",
-        default="data/raw/phase1_NetworkData.csv",
-        help="Path to phase1 CSV dataset.",
+        "--train",
+        default="data/train/train.csv",
+        help="Path to training CSV (default: data/train/train.csv).",
     )
     parser.add_argument(
-        "--phase2",
-        default="data/raw/phase2_NetworkData.csv",
-        help="Path to phase2 CSV dataset.",
+        "--val",
+        default="data/validation/validation.csv",
+        help="Path to validation CSV (default: data/validation/validation.csv).",
     )
     parser.add_argument(
         "--outdir",
@@ -463,7 +532,7 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         default=0.2,
         dest="test_size",
-        help="Fraction of data held out for evaluation.",
+        help="Fraction of data held out for internal evaluation (within train split).",
     )
     parser.add_argument(
         "--contamination",
@@ -476,8 +545,11 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
+    csv_paths = [args.train]
+    if args.val and os.path.exists(args.val):
+        csv_paths.append(args.val)
     train_pipeline(
-        csv_paths=[args.phase1, args.phase2],
+        csv_paths=csv_paths,
         outdir=args.outdir,
         chunksize=args.chunksize,
         max_rows=args.max_rows,

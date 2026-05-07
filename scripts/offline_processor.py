@@ -29,34 +29,38 @@ async def process_csv(csv_path: str, batch_size: int = 1000, max_rows: int = Non
                         await orchestrator.process_batch(batch)
                         total += len(batch)
                         batch = []
-                        logger.info("batch_processed", csv=Path(csv_path).name, total=total, rows=i+1)
+                        logger.info("batch_processed | csv=%s | total=%d | rows=%d",
+                                    Path(csv_path).name, total, i + 1)
                 except Exception as e:
-                    logger.error("flow_parse_error", error=str(e), row=i)
+                    logger.error("flow_parse_error | error=%s | row=%d", str(e), i)
             if batch:
                 await orchestrator.process_batch(batch)
                 total += len(batch)
-                logger.info("final_batch_processed", csv=Path(csv_path).name, total=total)
-        logger.info("offline_processing_complete", csv=csv_path, total_flows=total)
+                logger.info("final_batch_processed | csv=%s | total=%d",
+                            Path(csv_path).name, total)
+        logger.info("offline_processing_complete | csv=%s | total_flows=%d", csv_path, total)
     finally:
         await orchestrator.stop()
 
 
 def get_dataset_files(data_dir: Path) -> list[Path]:
-    patterns = ["*phase1*.csv", "*phase2*.csv"]
-    files = []
-    for pattern in patterns:
-        files.extend(data_dir.glob(pattern))
-    return sorted(set(files))
+    """Return ordered list of CICIoT2023 CSVs: train, validation, test."""
+    known_paths = [
+        data_dir / "train"      / "train.csv",
+        data_dir / "validation" / "validation.csv",
+        data_dir / "test"       / "test.csv",
+    ]
+    return [p for p in known_paths if p.exists()]
 
 
 async def process_all_datasets(data_dir: Path, batch_size: int = 1000, max_per_file: int = None):
     csv_files = get_dataset_files(data_dir)
     if not csv_files:
-        logger.warning("no_dataset_files_found", dir=str(data_dir))
+        logger.warning("no_dataset_files_found | dir=%s", str(data_dir))
         return
     
     for csv_path in csv_files:
-        logger.info("processing_dataset", path=str(csv_path))
+        logger.info("processing_dataset | path=%s", str(csv_path))
         await process_csv(str(csv_path), batch_size, max_per_file)
 
 
@@ -70,7 +74,7 @@ async def main():
     if args.csv:
         await process_csv(args.csv, args.batch_size, args.max_rows)
     else:
-        data_dir = Path(__file__).parent.parent / "data" / "raw"
+        data_dir = Path(__file__).parent.parent / "data"
         await process_all_datasets(data_dir, args.batch_size, args.max_rows)
 
 

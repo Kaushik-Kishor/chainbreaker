@@ -4,21 +4,38 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 export interface NodeEvent {
   id: string; // IP
   label: string;
-  risk_score: number; // 0 to 100
-  status: 'benign' | 'suspicious' | 'attack';
+  risk_score?: number; // legacy
+  anomaly_score?: number; // 0 to 100 from ML
+  confidence?: number;
+  attack_type?: string;
+  true_label?: string;
+  is_correct?: boolean;
+  ml_flag?: boolean;
+  status: 'benign' | 'suspicious' | 'critical' | 'attack';
 }
 
 export interface EdgeEvent {
-  source: string; // IP
-  target: string; // IP
+  source: string;
+  target: string;
+  protocol?: string;
   suspicious: boolean;
-  metadata?: Record<string, any>;
+  lateral_movement?: boolean;
+  rate?: number;
+}
+
+export interface ThreatSummary {
+  flows: number;
+  threats: number;
+  live: boolean;
 }
 
 export interface WsMessage {
-  type: 'INIT' | 'UPDATE';
+  type: string;
   nodes: NodeEvent[];
   edges: EdgeEvent[];
+  telemetry_event?: Record<string, any>;
+  threat_summary?: ThreatSummary;
+  timestamp?: string;
 }
 
 export function useWebSocket(url: string) {

@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
   body {
@@ -26,3 +24,11 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* ── SOC Graph Background ──────────────────────────────── */
+.graph-canvas {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(30, 30, 40, 0.4) 0%, transparent 70%),
+    #0a0a0a;
+}
+

@@ -1,20 +1,20 @@
 """
-train_ml.py — Entry point for training the NIDS ML models.
+train_ml.py — Entry point for training the NIDS ML models on CICIoT2023.
 
 Run from project root:
     python scripts/train_ml.py
 
-Optional flags (passed through to backend.ml.train):
-    --phase1  PATH          Path to phase1 CSV  [default: data/raw/phase1_NetworkData.csv]
-    --phase2  PATH          Path to phase2 CSV  [default: data/raw/phase2_NetworkData.csv]
-    --outdir  DIR           Model output dir    [default: models/]
-    --chunksize N           Rows per chunk      [default: 200000]
-    --max-rows N            Dev mode row cap    [default: 0 = all]
-    --test-size FLOAT       Test split fraction [default: 0.2]
-    --contamination FLOAT   IsoForest param     [default: 0.05]
+Optional flags:
+    --train  PATH       Path to training CSV   [default: data/train/train.csv]
+    --val    PATH       Path to validation CSV [default: data/validation/validation.csv]
+    --outdir DIR        Model output dir       [default: models/]
+    --chunksize N       Rows per chunk         [default: 200000]
+    --max-rows N        Dev mode row cap       [default: 0 = all]
+    --test-size FLOAT   Internal test split    [default: 0.2]
+    --contamination F   IsoForest param        [default: 0.05]
 
-Example (dev / smoke-test on 500k rows):
-    python scripts/train_ml.py --max-rows 500000 --chunksize 100000
+Example (dev / smoke-test on 200k rows):
+    python scripts/train_ml.py --max-rows 200000 --chunksize 100000
 """
 
 import sys
@@ -27,8 +27,11 @@ from backend.ml.train import _parse_args, train_pipeline  # noqa: E402
 
 if __name__ == "__main__":
     args = _parse_args()
+    csv_paths = [args.train]
+    if args.val and os.path.exists(args.val):
+        csv_paths.append(args.val)
     train_pipeline(
-        csv_paths=[args.phase1, args.phase2],
+        csv_paths=csv_paths,
         outdir=args.outdir,
         chunksize=args.chunksize,
         max_rows=args.max_rows,

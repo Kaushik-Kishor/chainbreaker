@@ -20,9 +20,11 @@ class Neo4jClient:
         if self._driver is not None:
             return
 
-        uri = config.get("neo4j.uri", "bolt://localhost:7687")
-        user = config.get("neo4j.user", "neo4j")
-        password = config.get("neo4j.password", "chainbreaker")
+        import os
+        # Env var (set by docker-compose) takes precedence over YAML config
+        uri      = os.environ.get("NEO4J_URI")      or config.get("neo4j.uri",      "bolt://neo4j:7687")
+        user     = os.environ.get("NEO4J_USER")     or config.get("neo4j.user",     "neo4j")
+        password = os.environ.get("NEO4J_PASSWORD") or config.get("neo4j.password", "chainbreaker")
 
         self._driver = AsyncGraphDatabase.driver(
             uri,

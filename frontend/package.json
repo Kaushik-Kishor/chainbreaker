@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.45.0",
+    "@types/cytoscape-fcose": "^2.2.5",
     "axios": "^1.7.2",
     "cytoscape": "^3.33.2",
+    "cytoscape-fcose": "^2.2.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.11.0",
     "react": "^18.3.1",
@@ -22,6 +24,7 @@
     "react-router-dom": "^6.23.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
     "@types/cytoscape": "^3.21.9",
     "@types/react": "^18.3.3",
     "@types/react-cytoscapejs": "^1.2.6",

@@ -29,18 +29,18 @@ async def init_schema(manager: SchemaManager) -> None:
 
 
 def get_dataset_files(data_dir: Path) -> list[Path]:
-    patterns = ["*phase1*.csv", "*phase2*.csv", "*.csv"]
-    files = []
-
-    for pattern in patterns:
-        files.extend(data_dir.glob(pattern))
-
-    return sorted(set(files))
+    """Return ordered list of CICIoT2023 CSVs: train, validation, test."""
+    known_paths = [
+        data_dir / "train"      / "train.csv",
+        data_dir / "validation" / "validation.csv",
+        data_dir / "test"       / "test.csv",
+    ]
+    return [p for p in known_paths if p.exists()]
 
 
 async def seed_hosts_from_dataset(csv_paths: list[str] | None = None) -> int:
     if csv_paths is None:
-        data_dir = Path(__file__).parent.parent / "data" / "raw"
+        data_dir = Path(__file__).parent.parent / "data"
 
         if data_dir.exists():
             csv_files = get_dataset_files(data_dir)

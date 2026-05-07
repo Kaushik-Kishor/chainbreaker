@@ -12,24 +12,25 @@ export function Layout() {
   const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/api/ws/telemetry';
   const { isConnected, lastMessage } = useWebSocket(wsUrl);
 
-  // We can compute derived stats from the incoming messages,
-  // falling back to placeholders if no data yet.
   const activeThreats = useMemo(() => {
+    return lastMessage?.threat_summary?.threats || 0;
+  }, [lastMessage]);
+
+  const suspiciousHosts = useMemo(() => {
+    // If backend doesn't provide suspicious explicitly, compute it
     if (!lastMessage) return 0;
-    return lastMessage.nodes.filter(n => n.status === 'attack').length;
+    return lastMessage.nodes.filter(n => n.status === 'suspicious').length;
   }, [lastMessage]);
 
   const totalFlows = useMemo(() => {
-    // If the backend sends an aggregate count, we'd use that.
-    // For now we just mock a counter or use edge count.
-    if (!lastMessage) return 0;
-    return lastMessage.edges.length;
+    return lastMessage?.threat_summary?.flows || 0;
   }, [lastMessage]);
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-[#0a0a0a] font-sans selection:bg-slate-800">
       <TopBar 
         activeThreats={activeThreats} 
+        suspiciousHosts={suspiciousHosts}
         totalFlows={totalFlows} 
         isConnected={isConnected} 
       />

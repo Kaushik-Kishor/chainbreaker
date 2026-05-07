@@ -47,6 +47,9 @@ dist/
 # Ignore raw datasets (recursive)
 data/raw/
 **/data/raw/
+data/train/
+data/test/
+data/validation/
 # Keep samples
 !data/sample/*.csv
 
@@ -64,6 +67,9 @@ models/*.pth
 models/*.pkl
 models/*.h5
 models/checkpoints/
+models/eval/
+models/*.png
+models/*.json
 
 # --- OS/IDE ---
 .DS_Store
