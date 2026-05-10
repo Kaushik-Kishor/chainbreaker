@@ -1,0 +1,127 @@
+{
+  "model_version": "v_20260510_090304",
+  "model_type": "XGBClassifier",
+  "training_timestamp": "2026-05-10T09:14:59.796330Z",
+  "total_samples": 6668822,
+  "total_features": 45,
+  "total_classes": 34,
+  "classes": [
+    "Backdoor_Malware",
+    "BenignTraffic",
+    "BrowserHijacking",
+    "CommandInjection",
+    "DDoS-ACK_Fragmentation",
+    "DDoS-HTTP_Flood",
+    "DDoS-ICMP_Flood",
+    "DDoS-ICMP_Fragmentation",
+    "DDoS-PSHACK_Flood",
+    "DDoS-RSTFINFlood",
+    "DDoS-SYN_Flood",
+    "DDoS-SlowLoris",
+    "DDoS-SynonymousIP_Flood",
+    "DDoS-TCP_Flood",
+    "DDoS-UDP_Flood",
+    "DDoS-UDP_Fragmentation",
+    "DNS_Spoofing",
+    "DictionaryBruteForce",
+    "DoS-HTTP_Flood",
+    "DoS-SYN_Flood",
+    "DoS-TCP_Flood",
+    "DoS-UDP_Flood",
+    "MITM-ArpSpoofing",
+    "Mirai-greeth_flood",
+    "Mirai-greip_flood",
+    "Mirai-udpplain",
+    "Recon-HostDiscovery",
+    "Recon-OSScan",
+    "Recon-PingSweep",
+    "Recon-PortScan",
+    "SqlInjection",
+    "Uploading_Attack",
+    "VulnerabilityScan",
+    "XSS"
+  ],
+  "validation_accuracy": 0.9942516110409255,
+  "top_features": [
+    {
+      "feature": "fin_flag_number",
+      "importance": 0.3670368194580078
+    },
+    {
+      "feature": "ICMP",
+      "importance": 0.15044496953487396
+    },
+    {
+      "feature": "syn_flag_number",
+      "importance": 0.1464197039604187
+    },
+    {
+      "feature": "psh_flag_number",
+      "importance": 0.04684256762266159
+    },
+    {
+      "feature": "SSH",
+      "importance": 0.032196540385484695
+    },
+    {
+      "feature": "UDP",
+      "importance": 0.028394458815455437
+    },
+    {
+      "feature": "IAT",
+      "importance": 0.02381833828985691
+    },
+    {
+      "feature": "Weight",
+      "importance": 0.021148772910237312
+    },
+    {
+      "feature": "HTTP",
+      "importance": 0.01810791902244091
+    },
+    {
+      "feature": "fin_count",
+      "importance": 0.015189054422080517
+    },
+    {
+      "feature": "Magnitue",
+      "importance": 0.015114504843950272
+    },
+    {
+      "feature": "ack_flag_number",
+      "importance": 0.011835307814180851
+    },
+    {
+      "feature": "Number",
+      "importance": 0.010154823772609234
+    },
+    {
+      "feature": "Header_Length",
+      "importance": 0.009978584945201874
+    },
+    {
+      "feature": "IPv",
+      "importance": 0.009099568240344524
+    },
+    {
+      "feature": "ARP",
+      "importance": 0.008104577660560608
+    },
+    {
+      "feature": "Tot size",
+      "importance": 0.007819591090083122
+    },
+    {
+      "feature": "Tot sum",
+      "importance": 0.007383323274552822
+    },
+    {
+      "feature": "ack_count",
+      "importance": 0.006718514021486044
+    },
+    {
+      "feature": "Min",
+      "importance": 0.006041567772626877
+    }
+  ]
+}

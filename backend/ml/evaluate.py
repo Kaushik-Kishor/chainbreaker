@@ -110,6 +110,15 @@ def evaluate_pipeline(data_path: str, model_dir: str, output_dir: str):
 
     macro_f1 = np.mean(f1)
     weighted_f1 = np.average(f1, weights=support)
+    
+    # ── ROC-AUC ───────────────────────────────────────────────────────────
+    try:
+        from sklearn.metrics import roc_auc_score
+        roc_auc = float(roc_auc_score(y_enc, y_prob, multi_class="ovr", average="macro", labels=present_labels))
+        log.info("ROC-AUC (Macro, OVR): %.4f", roc_auc)
+    except Exception as e:
+        log.warning("Could not calculate ROC-AUC: %s", e)
+        roc_auc = None
 
     # ── Top-K Confused Classes ────────────────────────────────────────────
     cm = confusion_matrix(y_enc, y_pred, labels=present_labels)
@@ -145,6 +154,7 @@ def evaluate_pipeline(data_path: str, model_dir: str, output_dir: str):
             "accuracy": float(accuracy),
             "macro_f1": float(macro_f1),
             "weighted_f1": float(weighted_f1),
+            "roc_auc": roc_auc,
             "avg_confidence_correct": avg_confidence_correct,
             "avg_confidence_incorrect": avg_confidence_incorrect,
         },
@@ -176,4 +186,18 @@ if __name__ == "__main__":
     parser.add_argument("--outdir", default="models/eval/", help="Output directory for reports")
     args = parser.parse_args()
 
-    evaluate_pipeline(args.data, args.model_dir, args.outdir)
+    model_dir = args.model_dir
+    if model_dir == "models/":
+        # Dynamic directory scanning for latest versioned model
+        if os.path.exists(model_dir):
+            versions = [d for d in os.listdir(model_dir) if d.startswith("v_") and os.path.isdir(os.path.join(model_dir, d))]
+            if versions:
+                model_dir = os.path.join(model_dir, sorted(versions)[-1])
+                log.info("Dynamically selected latest model directory: %s", model_dir)
+                
+    # Update outdir to match model version
+    outdir = args.outdir
+    if args.outdir == "models/eval/" and "v_" in model_dir:
+        outdir = os.path.join(model_dir, "eval")
+
+    evaluate_pipeline(args.data, model_dir, outdir)

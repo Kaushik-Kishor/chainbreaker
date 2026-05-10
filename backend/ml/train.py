@@ -218,7 +218,7 @@ def train_xgboost(
             max_depth=5,
             learning_rate=0.1,
             tree_method="hist",
-            device="cpu",
+            device="cuda",
             n_jobs=n_jobs,
             random_state=42,
             verbosity=0,
@@ -240,7 +240,7 @@ def train_xgboost(
         reg_alpha=0.1,
         reg_lambda=1.0,
         tree_method="hist",         # histogram-based — fast on large datasets
-        device="cpu",               # change to "cuda" if GPU available
+        device="cuda",               # change to "cuda" if GPU available
         n_jobs=n_jobs,
         random_state=42,
         early_stopping_rounds=20,
@@ -387,6 +387,11 @@ def train_pipeline(
     contamination: float = 0.05,
 ) -> None:
     t0 = time.time()
+    
+    # Generate versioned outdir
+    timestamp_str = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    versioned_outdir = os.path.join(outdir, f"v_{timestamp_str}")
+    log.info("Saving model artifacts to versioned directory: %s", versioned_outdir)
 
     # 1. Load
     df = load_dataset(csv_paths, chunksize=chunksize, max_rows=max_rows)
@@ -464,11 +469,13 @@ def train_pipeline(
     plt.bar(range(min(20, len(FEATURE_COLUMNS))), [importances[i] for i in indices[:20]], align="center")
     plt.xticks(range(min(20, len(FEATURE_COLUMNS))), [FEATURE_COLUMNS[i] for i in indices[:20]], rotation=45, ha="right")
     plt.tight_layout()
-    plt.savefig(os.path.join(outdir, "feature_importance.png"))
+    os.makedirs(versioned_outdir, exist_ok=True)
+    plt.savefig(os.path.join(versioned_outdir, "feature_importance.png"))
     plt.close()
 
     # 10. Save all artifacts
     metadata = {
+        "model_version": f"v_{timestamp_str}",
         "model_type": "XGBClassifier",
         "training_timestamp": datetime.datetime.utcnow().isoformat() + "Z",
         "total_samples": len(X_train) + len(X_test),
@@ -480,7 +487,7 @@ def train_pipeline(
     }
 
     save_artifacts(
-        outdir=outdir,
+        outdir=versioned_outdir,
         xgb_model=xgb_model,
         iso_model=iso_model,
         label_encoder=le,

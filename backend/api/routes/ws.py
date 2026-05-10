@@ -263,7 +263,7 @@ async def mock_telemetry_stream():
             status     = enriched.get("status", "benign")
             attack_type = enriched.get("attack_type", "BenignTraffic")
             
-            # Record true label and evaluate correctness
+            # Record true label and evaluate correctness (kept for internal Neo4j logging)
             enriched["true_label"] = label
             enriched["is_correct"] = (label == attack_type)
 
@@ -278,16 +278,15 @@ async def mock_telemetry_stream():
             rate       = _safe_float(row.get("Rate", 0))
             edge_count += 1
 
+            # Remove raw attack labels from nodes before broadcasting to UI
+            safe_enriched = {k: v for k, v in enriched.items() if k not in ("true_label", "is_correct", "attack_type", "label")}
+            
             # Build destination node too
             dst_status = _node_threat_counts.get(dst_ip, {}).get("status", "benign")
-            dst_attack = _node_threat_counts.get(dst_ip, {}).get("label", "BenignTraffic")
             dst_node = {
                 "id":    dst_ip,
                 "label": f"Host {dst_ip}",
                 "status": dst_status,
-                "attack_type": dst_attack,
-                "true_label": dst_attack,
-                "is_correct": True,
                 "confidence": 0.5,
                 "anomaly_score": 0.0,
             }
@@ -301,22 +300,21 @@ async def mock_telemetry_stream():
                 "rate":             rate,
             }]
 
-            # Async Neo4j
+            # Async Neo4j (still receives the raw attack_type for logging/admin)
             asyncio.create_task(_neo4j_upsert(src_ip, dst_ip, edges[0], enriched))
 
             message = {
                 "type":  "UPDATE",
-                "nodes": [enriched, dst_node],
+                "nodes": [safe_enriched, dst_node],
                 "edges": edges,
                 "telemetry_event": {
-                    "label":       label,
-                    "attack_type": attack_type,
-                    "is_correct":  enriched["is_correct"],
                     "Protocol":    protocol,
                     "Rate":        row.get("Rate", "0"),
                     "src_ip":      src_ip,
                     "dst_ip":      dst_ip,
                     "status":      status,
+                    "anomaly_score": enriched.get("anomaly_score", 0.0),
+                    "confidence": enriched.get("confidence", 0.0),
                 },
                 "threat_summary": {
                     "flows":   edge_count,

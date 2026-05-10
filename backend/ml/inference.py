@@ -62,9 +62,19 @@ class NIDSPredictor:
     """
 
     def __init__(self, model_dir: str | None = None) -> None:
-        model_dir = model_dir or _DEFAULT_MODEL_DIR
+        if model_dir is None:
+            # Dynamic directory scanning for latest versioned model
+            base_dir = _DEFAULT_MODEL_DIR
+            latest_version_dir = None
+            if os.path.exists(base_dir):
+                versions = [d for d in os.listdir(base_dir) if d.startswith("v_") and os.path.isdir(os.path.join(base_dir, d))]
+                if versions:
+                    latest_version_dir = os.path.join(base_dir, sorted(versions)[-1])
+            model_dir = latest_version_dir or base_dir
 
         log.info("[NIDSPredictor] Loading artifacts from: %s", model_dir)
+
+        self.model_version = os.path.basename(model_dir.rstrip('/\\')) if "v_" in model_dir else "unknown"
 
         self.xgb_model: xgb.XGBClassifier = _load_pickle(
             os.path.join(model_dir, "xgb_model.pkl")
@@ -134,8 +144,15 @@ class NIDSPredictor:
                 "confidence"    : float — XGBoost probability [0, 1]
                 "anomaly_score" : float — IsoForest score (lower = more anomalous)
                 "final_label"   : str   — "BENIGN" | "ATTACK" | "SUSPICIOUS"
+                "model_version" : str   - Version of the model used
+                "prediction_timestamp": str - ISO formatted timestamp
+                "inference_latency": float - Latency in seconds
             }
         """
+        import time
+        from datetime import datetime
+        start_time = time.perf_counter()
+
         # 1. Extract features
         X = self._extract_features(flow_dict)
 
@@ -161,12 +178,17 @@ class NIDSPredictor:
             final_label = "SUSPICIOUS"
         else:
             final_label = "BENIGN"
+            
+        latency = time.perf_counter() - start_time
 
         return {
             "attack_type": attack_type,
             "confidence": round(confidence, 6),
             "anomaly_score": round(anomaly_score, 6),
             "final_label": final_label,
+            "model_version": self.model_version,
+            "prediction_timestamp": datetime.utcnow().isoformat() + "Z",
+            "inference_latency": latency,
         }
 
     def predict_batch(
@@ -180,6 +202,10 @@ class NIDSPredictor:
         """
         if not flow_dicts:
             return []
+
+        import time
+        from datetime import datetime
+        start_time = time.perf_counter()
 
         # Build feature matrix in one shot
         rows = [self._extract_features(f).iloc[0].to_dict() for f in flow_dicts]
@@ -195,6 +221,10 @@ class NIDSPredictor:
         raw_scores = self.iso_model.score_samples(X)            # (N,)
         anomaly_scores = np.clip(-raw_scores, 0.0, 1.0)
         is_anomalies = raw_scores < self.iso_threshold
+        
+        latency = time.perf_counter() - start_time
+        avg_latency = latency / len(flow_dicts) if flow_dicts else 0.0
+        prediction_timestamp = datetime.utcnow().isoformat() + "Z"
 
         results = []
         for i in range(len(flow_dicts)):
@@ -215,6 +245,9 @@ class NIDSPredictor:
                 "confidence": round(conf, 6),
                 "anomaly_score": round(anom, 6),
                 "final_label": final,
+                "model_version": self.model_version,
+                "prediction_timestamp": prediction_timestamp,
+                "inference_latency": avg_latency,
             })
 
         return results

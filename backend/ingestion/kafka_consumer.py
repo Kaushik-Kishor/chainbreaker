@@ -30,7 +30,7 @@ KAFKA_CONFIG = {
 }
 
 TOPIC = "network-events"
-BATCH_SIZE = 100
+BATCH_SIZE = 500
 MAX_WAIT_SECONDS = 5.0   # flush partial batch after this many idle seconds
 
 
@@ -97,10 +97,13 @@ async def main():
                 # ML inference — vectorised over the whole batch
                 ml_results = predictor.predict_batch(batch)
                 for flow, ml in zip(batch, ml_results):
-                    flow["predicted_label"]  = ml["attack_type"]
-                    flow["confidence_score"] = ml["confidence"]
-                    flow["anomaly_score"]    = ml["anomaly_score"]
-                    flow["final_label"]      = ml["final_label"]
+                    flow["predicted_label"]      = ml["attack_type"]
+                    flow["confidence_score"]     = ml["confidence"]
+                    flow["anomaly_score"]        = ml["anomaly_score"]
+                    flow["final_label"]          = ml["final_label"]
+                    flow["model_version"]        = ml.get("model_version")
+                    flow["prediction_timestamp"] = ml.get("prediction_timestamp")
+                    flow["inference_latency"]    = ml.get("inference_latency")
 
                 count = await ingest_flow_batch(batch)
                 total_inserted += count
@@ -127,10 +130,13 @@ async def main():
             print(f"[consumer] Flushing remaining {len(batch)} flows...")
             ml_results = predictor.predict_batch(batch)
             for flow, ml in zip(batch, ml_results):
-                flow["predicted_label"]  = ml["attack_type"]
-                flow["confidence_score"] = ml["confidence"]
-                flow["anomaly_score"]    = ml["anomaly_score"]
-                flow["final_label"]      = ml["final_label"]
+                flow["predicted_label"]      = ml["attack_type"]
+                flow["confidence_score"]     = ml["confidence"]
+                flow["anomaly_score"]        = ml["anomaly_score"]
+                flow["final_label"]          = ml["final_label"]
+                flow["model_version"]        = ml.get("model_version")
+                flow["prediction_timestamp"] = ml.get("prediction_timestamp")
+                flow["inference_latency"]    = ml.get("inference_latency")
             count = await ingest_flow_batch(batch)
             total_inserted += count
             consumer.commit()

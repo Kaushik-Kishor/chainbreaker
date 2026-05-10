@@ -19,7 +19,7 @@ class AttackEventResponse(BaseModel):
     stage: str
     timestamp: str
     confidence: float
-    attack_label: str
+    risk_indicator: str  # Renamed from attack_label to mask raw labels
     source_ip: str
     dest_ip: str
     ml_model: str

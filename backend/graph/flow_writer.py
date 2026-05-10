@@ -123,9 +123,14 @@ def _build_row(flow: dict) -> dict:
         "label":         label,
         "sublabel":      sublabel,
         "sublabel_cat":  str(raw_props.get("subLabelCat", flow.get("sublabel_cat", flow.get("subLabelCat", "")))).strip(),
-        # ML placeholders
-        "predicted_label":  None,
-        "confidence_score": None,
+        # ML placeholders and metadata
+        "predicted_label":      flow.get("predicted_label"),
+        "confidence_score":     flow.get("confidence_score"),
+        "anomaly_score":        flow.get("anomaly_score"),
+        "final_label":          flow.get("final_label"),
+        "model_version":        flow.get("model_version"),
+        "prediction_timestamp": flow.get("prediction_timestamp"),
+        "inference_latency":    flow.get("inference_latency"),
     }
 
     return {
