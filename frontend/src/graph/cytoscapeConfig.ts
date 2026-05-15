@@ -169,7 +169,7 @@ export const cytoscapeStylesheet: any[] = [
       'text-background-opacity': 0.8,
       'text-background-padding': '2px',
       'text-background-shape': 'roundrectangle',
-      'min-zoomed-font-size': 12,  // Hide labels at low zoom
+      'min-zoomed-font-size': 15,  // Hide labels at low zoom
       'border-width': 2,
       'border-color': 'data(borderColor)',
       'border-opacity': 0.9,
@@ -216,14 +216,35 @@ export const cytoscapeStylesheet: any[] = [
       'text-background-opacity': 0.9,
     }
   },
-  // ── Infrastructure (diamond) ───────────────────────────────────────
+  // ── Infrastructure ───────────────────────────────────────────────
   {
     selector: '.infra',
     style: {
-      'shape': 'diamond',
       'border-width': 2,
       'border-color': '#3b82f6',
       'border-opacity': 0.8,
+    }
+  },
+  // ── Uncertain Telemetry (Diamond) ──────────────────────────────────
+  {
+    selector: '.unreliable',
+    style: {
+      'shape': 'diamond',
+      'shadow-blur': 15,
+      'shadow-color': '#eab308',
+      'shadow-opacity': 0.6,
+    }
+  },
+  // ── ML Misclassification (Evaluation) ──────────────────────────────
+  {
+    selector: '.misclassified',
+    style: {
+      'border-width': 3,
+      'border-color': '#ef4444',
+      'border-style': 'dashed',
+      'shadow-blur': 15,
+      'shadow-color': '#ef4444',
+      'shadow-opacity': 0.4,
     }
   },
   // ── Fading out nodes (lifecycle) ───────────────────────────────────
@@ -262,19 +283,58 @@ export const cytoscapeStylesheet: any[] = [
       'opacity': 0.85,
     }
   },
+  // ── Highlighted chain ──────────────────────────────────────────────
   {
-    selector: 'edge:selected',
+    selector: '.highlighted',
     style: {
+      'border-width': 4,
+      'border-color': '#ffffff',
+      'border-opacity': 1,
+      'shadow-blur': 20,
+      'shadow-color': 'data(color)',
+      'shadow-opacity': 1,
+      'text-opacity': 1,
+      'z-index': 999,
       'opacity': 1,
+    }
+  },
+  {
+    selector: 'edge.highlighted',
+    style: {
       'width': 4,
-      'line-color': '#ffffff',
-      'target-arrow-color': '#ffffff',
+      'line-color': 'data(color)',
+      'target-arrow-color': 'data(color)',
+      'opacity': 1,
+      'z-index': 998,
+    }
+  },
+  // ── Chain Edge Animation ───────────────────────────────────────────
+  {
+    selector: '.chain-edge',
+    style: {
+      'line-style': 'dashed',
+      'line-dash-pattern': [10, 5],
+      'line-dash-offset': 24, // Will be animated
+      'width': 5,
+      'line-color': 'data(color)',
+      'target-arrow-color': 'data(color)',
+      'opacity': 1,
+    }
+  },
+  // ── Dimmed (unrelated nodes) ───────────────────────────────────────
+  {
+    selector: '.dimmed',
+    style: {
+      'opacity': 0.15,
+      'text-opacity': 0.15,
+      'border-opacity': 0.15,
+      'background-opacity': 0.15,
     }
   },
 ];
 
 /* ── Layout Config ─────────────────────────────────────────────────────── */
-// Tuned for organic web-like topology, NOT grid patterns
+// Tuned for organic web-like topology, NOT grid patterns, preventing overlaps
 
 export const layoutConfig = {
   name: 'fcose',
@@ -285,21 +345,25 @@ export const layoutConfig = {
   animationEasing: 'ease-out-quint',
   fit: true,
   padding: 80,
-  nodeDimensionsIncludeLabels: false,
+  nodeDimensionsIncludeLabels: true,
   uniformNodeDimensions: false,
   packComponents: false,       // don't pack — let clusters breathe
   step: 'all',
 
-  // ── Physics tuning for organic web ──
-  idealEdgeLength: () => 220,            // long edges → spread
+  // ── Physics tuning for organic web & overlap prevention ──
+  idealEdgeLength: () => 320,            // increased to spread nodes more
   edgeElasticity: () => 0.1,             // low elasticity → less pull
-  nodeRepulsion: () => 8_000_000,        // extreme repulsion → no overlap
+  nodeRepulsion: () => 15_000_000,       // extreme repulsion → no overlap
   gravity: 0.02,                         // very low gravity → spread out
   gravityRange: 10,
   gravityCompound: 1.0,
   gravityRangeCompound: 1.5,
-  numIter: 5000,                         // more iterations → better convergence
+  numIter: 3000,                         // slightly reduced for perf
   initialEnergyOnIncremental: 0.2,
+
+  // Node separation to prevent overlap
+  nodeSeparation: 150,
+  nodeOverlap: 20,
 
   // Nesting
   nestingFactor: 0.1,

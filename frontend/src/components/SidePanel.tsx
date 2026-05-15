@@ -1,19 +1,22 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Server, Activity, ShieldAlert, Crosshair, Wifi, BarChart3, AlertTriangle } from 'lucide-react';
+import { X, Server, Activity, ShieldAlert, Crosshair, Wifi, BarChart3, AlertTriangle, GitPullRequest, Maximize } from 'lucide-react';
 import type { NodeEvent } from '../hooks/useWebSocket';
 import { getAttackFamily, ATTACK_FAMILIES } from '../graph/cytoscapeConfig';
 
 interface SidePanelProps {
   selectedNode: NodeEvent | null;
+  connectedFlows?: any[];
   onClose: () => void;
+  onTraceChain?: () => void;
+  onExpandKillChain?: () => void;
 }
 
-export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
+export function SidePanel({ selectedNode, connectedFlows = [], onClose, onTraceChain, onExpandKillChain }: SidePanelProps) {
   if (!selectedNode) return null;
 
   const family = getAttackFamily(selectedNode.attack_type || 'BenignTraffic');
   const familyInfo = ATTACK_FAMILIES[family] || ATTACK_FAMILIES.unknown;
-  const confidence = selectedNode.confidence ? (selectedNode.confidence * 100) : 0;
+  const confidence = selectedNode.confidence || 0;
   const anomaly = selectedNode.anomaly_score || 0;
 
   const statusConfig: Record<string, { text: string; color: string; bg: string }> = {
@@ -108,7 +111,7 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
             {/* Metric Cards */}
             <div className="grid grid-cols-2 gap-3 mb-6">
               {/* Status */}
-              <div className={`p-3 rounded-xl border border-white/5 ${status.bg}`}>
+              <div className={`p-3 rounded-xl border border-white/5 animate-fade-in stagger-1 ${status.bg}`}>
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <ShieldAlert className={`h-3.5 w-3.5 ${status.color}`} />
                   <span className="text-[10px] uppercase tracking-wider text-slate-500">Status</span>
@@ -119,7 +122,7 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
               </div>
 
               {/* Severity */}
-              <div className="p-3 rounded-xl border border-white/5 bg-slate-900/50">
+              <div className="p-3 rounded-xl border border-white/5 bg-slate-900/50 animate-fade-in stagger-2">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <AlertTriangle className={`h-3.5 w-3.5 ${severityColor}`} />
                   <span className="text-[10px] uppercase tracking-wider text-slate-500">Severity</span>
@@ -130,7 +133,7 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
               </div>
 
               {/* Confidence */}
-              <div className="p-3 rounded-xl border border-white/5 bg-slate-900/50">
+              <div className="p-3 rounded-xl border border-white/5 bg-slate-900/50 animate-fade-in stagger-3">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <BarChart3 className="h-3.5 w-3.5 text-purple-400" />
                   <span className="text-[10px] uppercase tracking-wider text-slate-500">Confidence</span>
@@ -151,7 +154,7 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
               </div>
 
               {/* Anomaly Score */}
-              <div className="p-3 rounded-xl border border-white/5 bg-slate-900/50">
+              <div className="p-3 rounded-xl border border-white/5 bg-slate-900/50 animate-fade-in stagger-4">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <Activity className="h-3.5 w-3.5 text-orange-400" />
                   <span className="text-[10px] uppercase tracking-wider text-slate-500">Anomaly</span>
@@ -173,7 +176,25 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
             </div>
 
             {/* Network Info */}
-            <div className="space-y-4">
+            <div className="space-y-4 animate-fade-in stagger-5">
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <button
+                  onClick={onTraceChain}
+                  className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-xs font-semibold text-slate-300 transition-colors border border-white/5"
+                >
+                  <GitPullRequest className="h-3.5 w-3.5" />
+                  Trace Path
+                </button>
+                <button
+                  onClick={onExpandKillChain}
+                  className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-xs font-semibold text-slate-300 transition-colors border border-white/5"
+                >
+                  <Maximize className="h-3.5 w-3.5" />
+                  Expand Chain
+                </button>
+              </div>
+
               <div>
                 <h4 className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-2 flex items-center gap-1.5">
                   <Wifi className="h-3 w-3" />
@@ -189,8 +210,8 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
                     <span style={{ color: familyInfo.color }}>{familyInfo.label}</span>
                   </div>
                   <div className="flex justify-between p-2.5 rounded-lg border border-white/5 bg-slate-900/30 text-xs font-mono">
-                    <span className="text-slate-500">Attack Class</span>
-                    <span className="text-slate-200 truncate ml-4">{selectedNode.attack_type || 'N/A'}</span>
+                    <span className="text-slate-500">Flow Count</span>
+                    <span className="text-slate-200">{connectedFlows.length}</span>
                   </div>
                 </div>
               </div>
@@ -201,15 +222,26 @@ export function SidePanel({ selectedNode, onClose }: SidePanelProps) {
                   <Crosshair className="h-3 w-3" />
                   Recent Activity
                 </h4>
-                <div className="space-y-1.5">
-                  {[1, 2, 3].map((_, i) => (
-                    <div key={i} className="flex justify-between items-center p-2.5 rounded-lg border border-white/5 bg-slate-900/30 text-xs font-mono text-slate-400">
-                      <span>{selectedNode.id} &rarr; 10.0.1.{10 + i}</span>
-                      <span className="text-slate-600 border border-slate-800 px-1.5 py-0.5 rounded text-[10px]">
-                        TCP
-                      </span>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {connectedFlows.length > 0 ? (
+                    connectedFlows.map((flow) => (
+                      <div key={flow.id} className="flex justify-between items-center p-2.5 rounded-lg border border-white/5 bg-slate-900/30 text-[11px] font-mono text-slate-400">
+                        <span className="truncate flex-1">
+                          {flow.direction === 'outbound' ? `${selectedNode.id} → ${flow.peerId}` : `${flow.peerId} → ${selectedNode.id}`}
+                        </span>
+                        <div className="flex items-center gap-2 ml-2">
+                          {flow.suspicious && <ShieldAlert className="h-3 w-3 text-red-500" />}
+                          <span className="text-slate-600 border border-slate-800 px-1.5 py-0.5 rounded text-[9px]">
+                            {flow.protocol}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-500 p-2 text-center border border-dashed border-white/10 rounded-lg">
+                      No recent flows
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>

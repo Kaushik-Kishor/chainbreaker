@@ -1,13 +1,17 @@
-import { Activity, ShieldCheck, Zap, Radio, Skull, Eye } from 'lucide-react';
+import { Activity, ShieldCheck, Zap, Radio, Skull, Eye, Clock, Shield } from 'lucide-react';
+import { ATTACK_FAMILIES } from '../graph/cytoscapeConfig';
 
 interface TopBarProps {
   activeThreats: number;
   suspiciousHosts: number;
   totalFlows: number;
   isConnected: boolean;
+  lastEventTime?: string;
+  dominantFamily?: string;
 }
 
-export function TopBar({ activeThreats, suspiciousHosts, totalFlows, isConnected }: TopBarProps) {
+export function TopBar({ activeThreats, suspiciousHosts, totalFlows, isConnected, lastEventTime, dominantFamily }: TopBarProps) {
+  const familyInfo = dominantFamily ? (ATTACK_FAMILIES[dominantFamily] || ATTACK_FAMILIES.unknown) : null;
   return (
     <div className="absolute top-0 left-0 w-full z-20 flex items-center justify-between px-4 py-3 pointer-events-auto">
       {/* Brand */}
@@ -19,10 +23,29 @@ export function TopBar({ activeThreats, suspiciousHosts, totalFlows, isConnected
 
       {/* Stats */}
       <div className="flex items-center gap-2.5">
+        {/* Last Event */}
+        {lastEventTime && (
+          <div className="flex items-center gap-2 bg-[#0a0a0a]/85 backdrop-blur-md border border-white/5 py-1.5 px-3 rounded-full text-xs">
+            <Clock className="h-3 w-3 text-slate-500" />
+            <span className="text-slate-400 font-mono text-[11px]">{lastEventTime}</span>
+          </div>
+        )}
+
+        {/* Dominant Family */}
+        {familyInfo && (
+          <div className="flex items-center gap-2 bg-[#0a0a0a]/85 backdrop-blur-md border border-white/5 py-1.5 px-3 rounded-full text-xs">
+            <div 
+              className="w-2 h-2 rounded-full" 
+              style={{ backgroundColor: familyInfo.color, boxShadow: `0 0 6px ${familyInfo.glow}` }}
+            />
+            <span className="text-slate-300 font-mono text-[11px] uppercase">{familyInfo.label}</span>
+          </div>
+        )}
+
         {/* Total Flows */}
         <div className="flex items-center gap-2 bg-[#0a0a0a]/85 backdrop-blur-md border border-white/5 py-1.5 px-3 rounded-full text-xs">
           <Activity className="h-3.5 w-3.5 text-slate-500" />
-          <span className="text-slate-300 font-mono tabular-nums">{totalFlows.toLocaleString()}</span>
+          <span className="text-slate-300 font-mono tabular-nums transition-all">{totalFlows.toLocaleString()}</span>
           <span className="text-slate-600 text-[10px] uppercase tracking-wider">Flows</span>
         </div>
 
@@ -38,11 +61,11 @@ export function TopBar({ activeThreats, suspiciousHosts, totalFlows, isConnected
         </div>
 
         {/* Active Threats */}
-        <div className={`flex items-center gap-2 bg-[#0a0a0a]/85 backdrop-blur-md border py-1.5 px-3 rounded-full text-xs
-          ${activeThreats > 0 ? 'border-red-500/20' : 'border-white/5'}`}
+        <div className={`flex items-center gap-2 bg-[#0a0a0a]/85 backdrop-blur-md border py-1.5 px-3 rounded-full text-xs transition-colors
+          ${activeThreats > 0 ? 'border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-white/5'}`}
         >
-          <Skull className={`h-3.5 w-3.5 ${activeThreats > 0 ? 'text-red-500' : 'text-slate-500'}`} />
-          <span className={`font-mono tabular-nums ${activeThreats > 0 ? 'text-red-400' : 'text-slate-400'}`}>
+          <Skull className={`h-3.5 w-3.5 transition-colors ${activeThreats > 0 ? 'text-red-500' : 'text-slate-500'}`} />
+          <span className={`font-mono tabular-nums transition-colors ${activeThreats > 0 ? 'text-red-400' : 'text-slate-400'}`}>
             {activeThreats}
           </span>
           <span className="text-slate-600 text-[10px] uppercase tracking-wider">Threats</span>

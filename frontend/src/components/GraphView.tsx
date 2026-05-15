@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import CytoscapeComponent from 'react-cytoscapejs';
+import { Crosshair, Maximize2, RefreshCw } from 'lucide-react';
 import {
   cytoscapeStylesheet,
   layoutConfig,
@@ -23,7 +24,7 @@ const MAX_NODES              = 180;   // Rolling node cap
 const MAX_EDGES              = 400;   // Rolling edge cap
 const INITIAL_LAYOUT_AT      = 50;    // Run first layout after this many nodes
 const RELAYOUT_BATCH         = 30;    // Re-layout after this many new unsettled nodes
-const RELAYOUT_COOLDOWN_MS   = 15000; // Min ms between layouts
+const RELAYOUT_COOLDOWN_MS   = 20000; // Min ms between layouts (increased for stability)
 const EDGE_FADE_MS           = 8000;  // Start fading edge after this
 const EDGE_REMOVE_MS         = 25000; // Remove edge after this
 const GC_INTERVAL_MS         = 4000;  // Garbage collection cycle
@@ -42,7 +43,10 @@ const INFRA_IPS = new Set([
 
 interface GraphViewProps {
   wsMessage: WsMessage | null;
-  onNodeSelect: (node: NodeEvent | null) => void;
+  onNodeSelect: (node: NodeEvent | null, connectedFlows?: any[]) => void;
+  traceNodeId?: string | null;
+  expandedNodeId?: string | null;
+  onClearFocus?: () => void;
 }
 
 interface ThreatStats {
@@ -91,12 +95,19 @@ function computeImportance(node: cytoscape.NodeSingular, now: number): number {
  *  GRAPH VIEW COMPONENT
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-export const GraphView = React.memo(({ wsMessage, onNodeSelect }: GraphViewProps) => {
+export const GraphView = React.memo(({ 
+  wsMessage, 
+  onNodeSelect, 
+  traceNodeId, 
+  expandedNodeId, 
+  onClearFocus 
+}: GraphViewProps) => {
   const cyRef = useRef<cytoscape.Core | null>(null);
   const layoutTimerRef = useRef<number>(0);
   const newNodeCountRef = useRef<number>(0);
   const initialLayoutDoneRef = useRef<boolean>(false);
   const manualPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const dashAnimationRef = useRef<number | null>(null);
   const [stats, setStats] = useState<ThreatStats>({
     totalNodes: 0, totalEdges: 0, attackNodes: 0, suspiciousNodes: 0,
     dominantFamily: 'benign', familyCounts: {}, totalPredictions: 0, correctPredictions: 0,
@@ -184,23 +195,34 @@ export const GraphView = React.memo(({ wsMessage, onNodeSelect }: GraphViewProps
         const existing = cy.getElementById(node.id);
 
         if (existing.length > 0) {
-          existing.data({
+          const newData: any = {
             status: node.status,
-            anomaly_score: score,
-            confidence: node.confidence,
             attack_type: attackType,
             attack_family: family,
             true_label: trueLabel,
             is_correct: isCorrect,
             color, glowColor, borderColor, size,
             lastSeen: now,
-          });
+          };
+          if (node.anomaly_score !== undefined) newData.anomaly_score = score;
+          if (node.confidence !== undefined) newData.confidence = node.confidence;
+          existing.data(newData);
           existing.removeClass('fading');
 
           if (node.status === 'attack' || node.status === 'critical') {
             existing.addClass('pulse');
           } else {
             existing.removeClass('pulse');
+          }
+          if (node.confidence !== undefined && node.confidence < 60.0) {
+            existing.addClass('unreliable');
+          } else {
+            existing.removeClass('unreliable');
+          }
+          if (!isCorrect) {
+            existing.addClass('misclassified');
+          } else {
+            existing.removeClass('misclassified');
           }
         } else {
           // Pre-position by cluster
@@ -226,6 +248,9 @@ export const GraphView = React.memo(({ wsMessage, onNodeSelect }: GraphViewProps
 
           if (isInfra) n.addClass('infra');
           if (node.status === 'attack' || node.status === 'critical') n.addClass('pulse');
+          if (node.confidence !== undefined && node.confidence < 60.0) n.addClass('unreliable');
+          if (!isCorrect) n.addClass('misclassified');
+          if (traceNodeId || expandedNodeId) n.addClass('dimmed'); // Dim new nodes if trace is active
           newNodesAdded++;
         }
       });
@@ -268,8 +293,10 @@ export const GraphView = React.memo(({ wsMessage, onNodeSelect }: GraphViewProps
               opacity: edge.suspicious ? 0.75 : 0.35,
               lastSeen: now,
               suspicious: edge.suspicious ? 1 : 0,
+              protocol: edge.protocol || 'TCP',
             },
           });
+          if (traceNodeId || expandedNodeId) cy.getElementById(edgeId).addClass('dimmed');
         }
       });
     });
@@ -401,6 +428,72 @@ export const GraphView = React.memo(({ wsMessage, onNodeSelect }: GraphViewProps
     return () => clearInterval(interval);
   }, []);
 
+  /* ── Attack Chain Highlighting & Expansion ───────────────────────────── */
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+
+    if (dashAnimationRef.current) {
+      clearInterval(dashAnimationRef.current);
+      dashAnimationRef.current = null;
+    }
+
+    cy.batch(() => {
+      // Reset classes
+      cy.elements().removeClass('highlighted dimmed chain-edge');
+      cy.edges().removeStyle('line-dash-offset');
+
+      const focusId = traceNodeId || expandedNodeId;
+      if (focusId) {
+        const root = cy.getElementById(focusId);
+        if (root.length > 0) {
+          // BFS up to depth 4 to find connected subgraphs
+          // For kill chain, we want both predecessors (sources) and successors (targets)
+          const chain = root.successors().union(root.predecessors()).union(root);
+          
+          const nodes = chain.filter('node');
+          const edges = chain.filter('edge');
+
+          nodes.addClass('highlighted');
+          edges.addClass('highlighted chain-edge');
+
+          const others = cy.elements().difference(chain);
+          others.addClass('dimmed');
+
+          // Smooth animated zoom-out for kill chain
+          if (expandedNodeId) {
+            cy.animate({
+              fit: {
+                eles: chain,
+                padding: 100
+              },
+              duration: 1000,
+              easing: 'ease-out-quint'
+            });
+          } else {
+            // Just center on traced node
+            cy.animate({
+              center: { eles: root },
+              zoom: Math.max(cy.zoom(), 1.5),
+              duration: 500
+            });
+          }
+
+          // Animate edge dashes
+          let offset = 24;
+          dashAnimationRef.current = setInterval(() => {
+            offset -= 1;
+            edges.style('line-dash-offset', offset);
+          }, 50) as unknown as number;
+        }
+      }
+    });
+
+    return () => {
+      if (dashAnimationRef.current) clearInterval(dashAnimationRef.current);
+    };
+  }, [traceNodeId, expandedNodeId]);
+
   /* ── Render ──────────────────────────────────────────────────────────── */
   return (
     <div className="absolute inset-0 bg-[#0a0a0a]">
@@ -416,7 +509,24 @@ export const GraphView = React.memo(({ wsMessage, onNodeSelect }: GraphViewProps
 
           // ── Node click → inspector ────────────────────────────────
           cy.on('tap', 'node', (evt) => {
-            const d = evt.target.data();
+            const node = evt.target;
+            const d = node.data();
+            
+            // Extract connected edges for side panel
+            const connectedEdges = node.connectedEdges().map((e: any) => {
+              const src = e.source().id();
+              const tgt = e.target().id();
+              const dir = src === d.id ? 'outbound' : 'inbound';
+              const peerId = dir === 'outbound' ? tgt : src;
+              return {
+                id: e.id(),
+                peerId,
+                direction: dir,
+                suspicious: e.data('suspicious'),
+                protocol: e.data('protocol') || 'TCP',
+              };
+            });
+
             onNodeSelect({
               id: d.id,
               label: d.label,
@@ -427,7 +537,7 @@ export const GraphView = React.memo(({ wsMessage, onNodeSelect }: GraphViewProps
               attack_type: d.attack_type,
               true_label: d.true_label,
               is_correct: d.is_correct,
-            });
+            }, connectedEdges);
           });
 
           cy.on('tap', (evt) => {
@@ -443,7 +553,10 @@ export const GraphView = React.memo(({ wsMessage, onNodeSelect }: GraphViewProps
       />
 
       {/* ── Attack Families Legend ───────────────────────────────────── */}
-      <div className="absolute bottom-4 left-4 z-20 bg-[#0a0a0a]/90 backdrop-blur-md border border-white/10 rounded-xl p-3.5 pointer-events-auto select-none">
+      <div 
+        className="absolute bottom-4 left-4 z-20 bg-[#0a0a0a]/90 backdrop-blur-md border border-white/10 rounded-xl p-3.5 pointer-events-auto select-none"
+        style={{ resize: 'both', overflow: 'hidden', minWidth: '220px', minHeight: '150px' }}
+      >
         <h4 className="text-[9px] uppercase tracking-[0.2em] text-slate-600 font-semibold mb-2.5">
           Attack Families
         </h4>
@@ -463,10 +576,53 @@ export const GraphView = React.memo(({ wsMessage, onNodeSelect }: GraphViewProps
             </div>
           ))}
         </div>
+        <div className="mt-3 pt-2 border-t border-white/10 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-slate-400" />
+            <span className="text-[9px] text-slate-500 font-mono">Stable Telemetry</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rotate-45 bg-[#eab308]" />
+            <span className="text-[9px] text-slate-500 font-mono">Uncertain (&lt;60% Conf)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full border border-dashed border-[#ef4444]" />
+            <span className="text-[9px] text-slate-500 font-mono">ML Mismatch (Eval)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Overlay Controls ─────────────────────────────────────────── */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+        {(traceNodeId || expandedNodeId) && (
+          <button
+            onClick={onClearFocus}
+            className="flex items-center gap-2 bg-slate-800/90 hover:bg-slate-700/90 backdrop-blur-md border border-white/10 rounded-full px-4 py-2 text-xs font-semibold text-slate-200 transition-colors shadow-xl animate-fade-in"
+          >
+            Clear Focus
+          </button>
+        )}
+        <button
+          onClick={() => runLayout(false)}
+          className="p-2 bg-slate-800/90 hover:bg-slate-700/90 backdrop-blur-md border border-white/10 rounded-full text-slate-400 hover:text-slate-200 transition-colors"
+          title="Re-layout graph"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => { if (cyRef.current) cyRef.current.fit(undefined, 80); }}
+          className="p-2 bg-slate-800/90 hover:bg-slate-700/90 backdrop-blur-md border border-white/10 rounded-full text-slate-400 hover:text-slate-200 transition-colors"
+          title="Zoom to fit"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
       </div>
 
       {/* ── Threat Intel HUD ─────────────────────────────────────────── */}
-      <div className="absolute bottom-4 right-4 z-20 bg-[#0a0a0a]/90 backdrop-blur-md border border-white/10 rounded-xl p-3.5 pointer-events-auto min-w-[190px] select-none">
+      <div 
+        className="absolute bottom-4 right-4 z-20 bg-[#0a0a0a]/90 backdrop-blur-md border border-white/10 rounded-xl p-3.5 pointer-events-auto select-none"
+        style={{ resize: 'both', overflow: 'hidden', minWidth: '190px', minHeight: '160px' }}
+      >
         <h4 className="text-[9px] uppercase tracking-[0.2em] text-slate-600 font-semibold mb-2.5">
           Threat Intel
         </h4>

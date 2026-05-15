@@ -278,8 +278,8 @@ async def mock_telemetry_stream():
             rate       = _safe_float(row.get("Rate", 0))
             edge_count += 1
 
-            # Remove raw attack labels from nodes before broadcasting to UI
-            safe_enriched = {k: v for k, v in enriched.items() if k not in ("true_label", "is_correct", "attack_type", "label")}
+            # Keep attack_type, true_label, is_correct for frontend node-coloring & ML panel
+            safe_enriched = {k: v for k, v in enriched.items() if k not in ("label",)}
             
             # Build destination node too
             dst_status = _node_threat_counts.get(dst_ip, {}).get("status", "benign")
@@ -287,8 +287,6 @@ async def mock_telemetry_stream():
                 "id":    dst_ip,
                 "label": f"Host {dst_ip}",
                 "status": dst_status,
-                "confidence": 0.5,
-                "anomaly_score": 0.0,
             }
 
             edges = [{

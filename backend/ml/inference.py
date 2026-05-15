@@ -37,6 +37,33 @@ _DEFAULT_MODEL_DIR = os.environ.get("MODEL_DIR", "models/")
 _CONFIDENCE_THRESHOLD = float(os.environ.get("XGB_CONFIDENCE_THRESHOLD", "0.5"))
 
 
+# ── Probability calibration ───────────────────────────────────────────────────
+# XGBoost on well-separated datasets like CICIoT2023 produces max-probabilities
+# in a very narrow band (0.995 – 0.99999).  A naive max(proba)*100 always rounds
+# to 100%.  We use a log-space rescaling that maps the *meaningful* micro-
+# differences within that band into a visible 60-100% confidence range.
+#
+#   -log10(1 - p)  maps:
+#     p=0.99   → 2.0
+#     p=0.999  → 3.0
+#     p=0.9999 → 4.0
+#
+# We linearly map [2.0, 5.0] → [60%, 100%], clamped.
+# This is monotonic: higher raw probability ↔ higher calibrated confidence.
+
+def _calibrate_confidence(raw_prob: float) -> float:
+    """Convert a raw max-probability into a calibrated 0-100 confidence %."""
+    clamped = float(np.clip(raw_prob, 0.0, 1.0))
+    if clamped <= 0.0:
+        return 0.0
+    if clamped >= 1.0 - 1e-15:
+        return 100.0
+    neg_log = -np.log10(1.0 - clamped)
+    # Map [2.0, 5.0] → [60, 100];  below 2.0 clamps to 60, above 5.0 to 100
+    calibrated = 60.0 + (neg_log - 2.0) * (40.0 / 3.0)
+    return round(float(np.clip(calibrated, 0.0, 100.0)), 1)
+
+
 # ── Artifact loader ───────────────────────────────────────────────────────────
 
 def _load_pickle(path: str) -> Any:
@@ -159,7 +186,7 @@ class NIDSPredictor:
         # 2. XGBoost inference
         proba = self.xgb_model.predict_proba(X)[0]           # shape: (num_classes,)
         predicted_idx = int(np.argmax(proba))
-        confidence = float(proba[predicted_idx])
+        raw_confidence = float(np.max(proba))
         attack_type: str = self.label_encoder.classes_[predicted_idx]
 
         # 3. Isolation Forest anomaly score
@@ -170,9 +197,18 @@ class NIDSPredictor:
         anomaly_score = float(np.clip(-raw_score, 0.0, 1.0))
         is_anomaly = raw_score < self.iso_threshold
 
-        # 4. Decision logic
+        confidence_pct = _calibrate_confidence(raw_confidence)
+
+        log.info(
+            "Prediction=%s confidence=%.1f%% raw_prob=%.6f",
+            attack_type,
+            confidence_pct,
+            raw_confidence,
+        )
+
+        # 4. Decision logic — uses raw probability, NOT calibrated display value
         #    Priority: XGB attack prediction > anomaly flag > benign
-        if attack_type != BENIGN_LABEL and confidence >= _CONFIDENCE_THRESHOLD:
+        if attack_type != BENIGN_LABEL and raw_confidence >= _CONFIDENCE_THRESHOLD:
             final_label = "ATTACK"
         elif is_anomaly:
             final_label = "SUSPICIOUS"
@@ -183,7 +219,7 @@ class NIDSPredictor:
 
         return {
             "attack_type": attack_type,
-            "confidence": round(confidence, 6),
+            "confidence": confidence_pct,
             "anomaly_score": round(anomaly_score, 6),
             "final_label": final_label,
             "model_version": self.model_version,
@@ -214,7 +250,7 @@ class NIDSPredictor:
         # XGBoost batch
         probas = self.xgb_model.predict_proba(X)               # (N, num_classes)
         predicted_idxs = np.argmax(probas, axis=1)
-        confidences = probas[np.arange(len(probas)), predicted_idxs]
+        confidences = np.max(probas, axis=1)
         attack_types = self.label_encoder.classes_[predicted_idxs]
 
         # IsoForest batch
@@ -229,11 +265,13 @@ class NIDSPredictor:
         results = []
         for i in range(len(flow_dicts)):
             att = attack_types[i]
-            conf = float(confidences[i])
+            raw_conf = float(confidences[i])
             anom = float(anomaly_scores[i])
             is_anom = bool(is_anomalies[i])
 
-            if att != BENIGN_LABEL and conf >= _CONFIDENCE_THRESHOLD:
+            conf_pct = _calibrate_confidence(raw_conf)
+
+            if att != BENIGN_LABEL and raw_conf >= _CONFIDENCE_THRESHOLD:
                 final = "ATTACK"
             elif is_anom:
                 final = "SUSPICIOUS"
@@ -242,7 +280,7 @@ class NIDSPredictor:
 
             results.append({
                 "attack_type": att,
-                "confidence": round(conf, 6),
+                "confidence": conf_pct,
                 "anomaly_score": round(anom, 6),
                 "final_label": final,
                 "model_version": self.model_version,

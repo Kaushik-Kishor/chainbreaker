@@ -3,6 +3,7 @@
 @layer base {
   body {
     @apply bg-[#0a0a0a] text-slate-200 antialiased overflow-hidden selection:bg-slate-700 selection:text-white;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 }
 
@@ -19,6 +20,7 @@
 ::-webkit-scrollbar-thumb {
   background: #333;
   border-radius: 3px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -27,8 +29,42 @@
 
 /* ── SOC Graph Background ──────────────────────────────── */
 .graph-canvas {
-  background:
+  background-color: #0a0a0a;
+  background-image: 
     radial-gradient(circle at 50% 50%, rgba(30, 30, 40, 0.4) 0%, transparent 70%),
-    #0a0a0a;
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+  background-position: center center, center center, center center;
 }
 
+/* ── Animations ──────────────────────────────── */
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 15px var(--glow-color, rgba(239, 68, 68, 0.4)), 0 0 30px var(--glow-color, rgba(239, 68, 68, 0.2));
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 25px var(--glow-color, rgba(239, 68, 68, 0.7)), 0 0 50px var(--glow-color, rgba(239, 68, 68, 0.4));
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 15px var(--glow-color, rgba(239, 68, 68, 0.4)), 0 0 30px var(--glow-color, rgba(239, 68, 68, 0.2));
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+.stagger-1 { animation-delay: 0.1s; opacity: 0; }
+.stagger-2 { animation-delay: 0.2s; opacity: 0; }
+.stagger-3 { animation-delay: 0.3s; opacity: 0; }
+.stagger-4 { animation-delay: 0.4s; opacity: 0; }
+.stagger-5 { animation-delay: 0.5s; opacity: 0; }
